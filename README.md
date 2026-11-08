@@ -59,3 +59,9 @@ assets/c64.glb              the 3D desk setup (keys split into separate meshes)
 - The character set and all demo programs were drawn/written for this project; no Commodore ROM data is included.
 - The 3D model comes from the "Commodore 64 computer full pack" Blender scene. It was converted to a
   Draco-compressed GLB with each key separated and the CRT screen UV-mapped so the emulator can draw on it.
+
+## License
+
+Code, character set and demo programs: [MIT](LICENSE). The 3D model in `assets/` keeps its original
+creator's license and isn't covered by the MIT license. "Commodore" and "Commodore 64" are trademarks
+of their respective owners; this project isn't affiliated with them.
