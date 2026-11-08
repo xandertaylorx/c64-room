@@ -191,7 +191,7 @@ $('startBtn').onclick = async () => {
   $('start').classList.add('hidden');
   started = true;
   await c64.sid.start();
-  setTimeout(() => powerOn(), 350);
+  setTimeout(() => { powerOn(); setTimeout(() => toast('Click the 1541 to run a game · Program = paste code · ? = help'), 1800); }, 350);
   canvas.focus();
 };
 function powerOn() { c64.powerOn(); crt.setPower(true); c64.foley.click(0.12); }
@@ -251,6 +251,48 @@ function clickKeyUp(name) {
 }
 
 // physical keyboard
+// ---- toasts, copy and paste ----------------------------------------------------
+let toastT = 0;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400);
+}
+function screenText() {
+  const base = c64.k.screenBase, rows = [];
+  for (let y = 0; y < 25; y++) {
+    let l = '';
+    for (let x = 0; x < 40; x++) {
+      const sc = c64.m.ram[base + y * 40 + x] & 0x7f;
+      let ch = ' ';
+      if (sc === 0) ch = '@'; else if (sc < 27) ch = String.fromCharCode(64 + sc);
+      else if (sc < 32) ch = '[£]↑←'[sc - 27];
+      else if (sc < 64) ch = String.fromCharCode(sc);
+      else ch = '#';
+      l += ch;
+    }
+    rows.push(l.replace(/\s+$/, ''));
+  }
+  while (rows.length && !rows[rows.length - 1]) rows.pop();
+  return rows.join('\n');
+}
+async function copyText(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(what + ' copied'); return true; }
+  catch {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta);
+    ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch { /* ignore */ }
+    ta.remove(); toast(ok ? what + ' copied' : 'Copy was blocked by the browser'); return ok;
+  }
+}
+let pasteSeen = 0;
+function pasteFallback() {
+  const t = Date.now();
+  setTimeout(() => {
+    if (pasteSeen >= t) return; // the normal paste event handled it
+    if (!navigator.clipboard || !navigator.clipboard.readText) { toast('Paste blocked: use the Program panel'); return; }
+    navigator.clipboard.readText().then(txt => { if (txt) pasteText(txt); }).catch(() => toast('Paste blocked by the browser: use the Program panel'));
+  }, 250);
+}
+
 // pasting: text is fed through the 10-key buffer as if typed, so whole programs can be pasted
 const pasteQueue = [];
 const PASTE_SYMBOLS = { '£': 92, '^': 94, '_': 95, '`': 95, '\\': 92, '~': 255, '[': 91, ']': 93, '{': 91, '}': 93, '|': 221 };
@@ -281,6 +323,7 @@ function feedPaste() {
 }
 window.addEventListener('paste', (e) => {
   if (!started || isTypingInUI(e)) return;
+  pasteSeen = Date.now();
   const text = e.clipboardData && e.clipboardData.getData('text');
   if (!text) return;
   e.preventDefault();
@@ -292,6 +335,11 @@ const pcDown = new Map(); // code -> list of c64 key names animated
 function isTypingInUI(e) { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA'); }
 window.addEventListener('keydown', (e) => {
   if (!started || isTypingInUI(e)) return;
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.code === 'KeyV' || e.code === 'KeyC')) {
+    if (e.code === 'KeyV') pasteFallback();
+    else { const sel = String(getSelection()); copyText(sel || screenText(), sel ? 'Selection' : 'Screen text'); e.preventDefault(); }
+    return;
+  }
   if (e.metaKey) return; // leave browser shortcuts alone
   if (e.ctrlKey && e.code === 'KeyV' && !e.altKey) return; // let the browser paste (handled below)
   if (e.code === 'F9') { e.preventDefault(); setFlat(!flat); return; }
@@ -450,13 +498,69 @@ $('btnFlat').onclick = () => setFlat(!flat);
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => togglePanel(b.dataset.close, false));
 function togglePanel(id, force) {
   const el = $(id); const show = force ?? el.classList.contains('hidden');
-  if (show) ['diskPanel', 'printerPanel', 'helpPanel'].forEach(p => p !== id && $(p).classList.add('hidden'));
+  if (show) ['diskPanel', 'printerPanel', 'helpPanel', 'progPanel'].forEach(p => p !== id && $(p).classList.add('hidden'));
   el.classList.toggle('hidden', !show);
   if (show && id === 'diskPanel') renderDisk();
 }
 let flat = false;
 const flatCtx = $('flatCanvas').getContext('2d');
 function setFlat(on) { flat = on; $('flat').classList.toggle('hidden', !on); $('btnFlat').classList.toggle('on', on); }
+
+// program editor ---------------------------------------------------------------
+// the program in memory is also kept in this browser, so closing the tab doesn't lose work
+let autosaved = '';
+try { autosaved = localStorage.getItem('c64.autosave') || ''; } catch { /* storage blocked */ }
+setInterval(() => {
+  if (!c64.powered || document.hidden) return;
+  const t = c64.listing();
+  if (t && t !== autosaved) { autosaved = t; try { localStorage.setItem('c64.autosave', t); } catch { /* ignore */ } }
+}, 3000);
+$('btnProg').onclick = () => {
+  togglePanel('progPanel');
+  if ($('progPanel').classList.contains('hidden') || $('progText').value) return;
+  if (c64.basic.lines().length) $('progGet').click();
+  else if (autosaved) { $('progText').value = autosaved; progMsg('Recovered the last program from your previous session. Press Send to C64 to bring it back.'); }
+};
+const progMsg = (t) => { $('progMsg').textContent = t; };
+$('progGet').onclick = () => { const t = c64.listing(); $('progText').value = t; progMsg(t ? t.split('\n').length + ' lines read from the C64.' : 'There is no program in memory.'); };
+$('progSend').onclick = () => {
+  if (!c64.powered) powerOn();
+  if (c64.basic.state !== 'direct') { c64.typePetscii(3); }
+  setTimeout(() => {
+    const r = c64.loadListing($('progText').value);
+    progMsg(r.count + ' lines sent to the C64' + (r.skipped ? ' (' + r.skipped + ' lines without a line number were skipped)' : '') + '. Type RUN to start it.');
+    c64.basic.state = 'direct'; c64.basic.ready();
+    toast(r.count + ' lines loaded. Type RUN');
+  }, 150);
+};
+$('progCopy').onclick = () => copyText($('progText').value || c64.listing(), 'Listing');
+$('progDown').onclick = () => {
+  const t = $('progText').value || c64.listing(); if (!t) return;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t + '\n'], { type: 'text/plain' })); a.download = 'program.bas'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('progFile').onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  if (/\.prg$/i.test(f.name)) {
+    const buf = new Uint8Array(await f.arrayBuffer());
+    if (buf[0] === 1 && buf[1] === 8) {
+      // load a tokenised program straight into memory, then show its listing
+      c64.m.ram.set(buf.subarray(2), 0x801); const end = 0x801 + buf.length - 2;
+      c64.basic.wr16(45, end); c64.basic.relink(); $('progText').value = c64.listing(); progMsg('PRG loaded into memory. Type RUN.');
+    } else progMsg('That PRG is machine code, not BASIC. Put it on a disk with the 1541 panel instead.');
+  } else { $('progText').value = await f.text(); progMsg('File opened. Press Send to C64.'); }
+  e.target.value = '';
+};
+$('saveHere').onclick = () => {
+  const name = asciiToPet($('saveName').value.trim().toUpperCase().slice(0, 16));
+  if (!name) { toast('Give the program a name first'); return; }
+  if (!c64.basic.lines().length) { toast('There is no program in memory to save'); return; }
+  if (!c64.drive.disk) { toast('No disk in the drive'); return; }
+  const f = c64.drive.disk.files.find(x => x.name === name);
+  if (f && !confirm('"' + petToAscii(name) + '" already exists on this disk. Replace it?')) return;
+  if (!c64.drive.saveFile('@0:' + name, c64.programPrg())) { toast('Could not save: ' + c64.drive.statusString()); return; }
+  renderDisk(); toast('Saved ' + petToAscii(name).toUpperCase());
+};
 
 // printer
 c64.printer.onChange = (lines) => {

@@ -139,3 +139,19 @@ code, kbd { font-family: var(--mono); font-size: 11px; background: rgba(239,230,
 .gh:hover { color: var(--c3); transform: translateY(-2px); }
 .gh:focus-visible { outline: 2px solid var(--c3); outline-offset: 2px; }
 @media (max-width: 720px) { .gh { bottom: 76px; } }
+
+textarea#progText {
+  width: 100%; min-height: 260px; max-height: 50vh; resize: vertical; margin-bottom: 10px; padding: 10px; color: #a9b4ff; background: #1a1512;
+  border: 1px solid var(--line); border-radius: 8px; font: 12px/1.5 var(--mono); tab-size: 2; white-space: pre;
+}
+input[type=text] { font: 500 12px var(--mono); background: #e6dccb; color: #2a221c; border: 1px solid #8f8473; border-radius: 6px; padding: 6px 8px; width: 100%; text-transform: uppercase; }
+.row.wrap { flex-wrap: wrap; align-items: center; }
+button.small.primary { background: var(--c3); color: #2a221c; border-color: #9b7330; font-weight: 600; }
+button.small.primary:hover { filter: brightness(1.08); background: var(--c3); }
+label.filebtn { position: relative; display: inline-flex; flex-direction: row; align-items: center; background: #3a3029; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; cursor: pointer; font-size: 11px; }
+label.filebtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.toast {
+  position: fixed; z-index: 30; left: 50%; bottom: 84px; transform: translateX(-50%) translateY(10px); opacity: 0; pointer-events: none;
+  background: rgba(20,16,13,0.94); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; font-size: 12px; transition: opacity .2s, transform .2s;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }

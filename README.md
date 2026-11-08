@@ -19,10 +19,24 @@ from-scratch JavaScript re-implementation.
 | **1541 drive** | `LOAD`/`SAVE`/`VERIFY`, `LOAD"$",8` directory, `,8,1` absolute loads, wildcards, sequential files with `OPEN/PRINT#/INPUT#/GET#/CLOSE`, command channel 15 (`S:`, `R:`, `N:`, `C:`, error status). Import `.prg`, `.d64` and BASIC text; export `.prg`. Disks persist in localStorage |
 | **Peripherals** | Datasette (device 1), printer (device 4, `OPEN 4,4:CMD 4`), joystick in port 2 (arrows + space or a gamepad) |
 
+## Programs included
+
+Three disks come in the 1541 (pick one in the disk panel):
+
+- **GAMES**: SNAKE, PONG, BREAKOUT, SPACE RAID, BLOCKFALL, LUNAR LANDER, HANGMAN, CODEBREAKER, TIC TAC TOE, BLACKJACK, WUMPUS, CAVE (text adventure), NUMBER GUESS
+- **UTILITIES**: README (a tutorial), PIANO (SID keyboard), ADDRESS BOOK (sequential files on disk), SPRITE EDITOR (prints DATA lines)
+- **DEMO DISK**: HELLO, MAZE, SPRITE, ODE TO JOY, SOUND FX, CHARSET, ML DEMO, RAINBOW
+
+All of them are original programs, written for this project in plain BASIC V2. They live as readable
+text in `programs/**/*.bas`; run `node tools/build-library.mjs` after editing to rebuild `js/c64/games.js`.
+Anything you SAVE to those disks is kept; the built-in programs are refreshed when the library changes.
+Use the **MY DISK** disk for your own work.
+
 ## Using it
 
 - **Esc** = RUN/STOP, **PageUp** = RUN/STOP + RESTORE, **Alt/⌥** = C=, **Ctrl/Tab** = CTRL
 - **Shift + Alt** switches character sets, **Ctrl/Alt + 1–8** set colours, **F9** toggles the flat 2D screen
+- **Program** button: a text box to paste, edit, copy, open and download BASIC listings. **Ctrl/Cmd+C** copies the C64 screen, **Ctrl/Cmd+V** pastes text into the machine
 - Click the 1541 to manage disks, the joystick to plug it in, the power brick to switch on/off
 - The demo disk has `HELLO`, `MAZE`, `SPRITE`, `ODE TO JOY`, `SOUND FX`, `SNAKE`, `GUESS`, `CHARSET`, `ML DEMO`, `RAINBOW`
 
@@ -51,6 +65,9 @@ js/c64/disk.js              1541 drive, D64 import
 js/c64/system.js            wires everything together
 js/c64/font.js              original 8x8 character set
 js/c64/demos.js             demo disk programs
+js/c64/games.js             GENERATED from programs/*/*.bas
+programs/                   the built-in games and utilities as BASIC source
+tools/build-library.mjs     bundles programs/ into js/c64/games.js
 assets/c64.glb              the 3D desk setup (keys split into separate meshes)
 ```
 

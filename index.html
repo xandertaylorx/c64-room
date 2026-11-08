@@ -49,6 +49,7 @@
   </a>
 
   <div id="tooltip" class="tooltip hidden"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div id="mods" class="mods"></div>
 
   <nav class="dock" aria-label="Controls">
@@ -61,6 +62,7 @@
     <button id="btnFlat" class="key" title="Flat 2D screen (F9)">2D</button>
     <span class="sep"></span>
     <button id="btnDisk" class="key" title="1541 disk drive"><span class="led drive"></span>1541</button>
+    <button id="btnProg" class="key" title="Program editor: copy, paste and edit BASIC listings">Program</button>
     <button id="btnJoy" class="key" title="Joystick in port 2: arrows + space">Joystick</button>
     <button id="btnPrinter" class="key hidden" title="Printer output">Printer</button>
     <span class="sep"></span>
@@ -91,7 +93,29 @@
       Drop <b>.prg</b>, <b>.d64</b> or BASIC <b>.bas/.txt</b> files here
       <input type="file" id="fileInput" multiple accept=".prg,.d64,.bas,.txt,.seq">
     </div>
+    <div class="row">
+      <label class="grow">Save the program in memory to this disk
+        <input id="saveName" type="text" maxlength="16" placeholder="NAME" spellcheck="false" autocomplete="off">
+      </label>
+      <button id="saveHere" class="small primary">Save</button>
+    </div>
     <p class="hint">Disks are saved in this browser. Try <code>LOAD"$",8</code> then <code>LIST</code>.</p>
+  </aside>
+
+  <aside id="progPanel" class="panel wide hidden" aria-label="Program editor">
+    <div class="panel-head">
+      <h2>Program <small>BASIC listing in memory</small></h2>
+      <button class="close" data-close="progPanel" aria-label="Close">×</button>
+    </div>
+    <textarea id="progText" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="Paste a BASIC listing here (lines starting with a line number), then press Send to C64."></textarea>
+    <div class="row wrap">
+      <button id="progGet" class="small">Get from C64</button>
+      <button id="progSend" class="small primary">Send to C64</button>
+      <button id="progCopy" class="small">Copy</button>
+      <button id="progDown" class="small">Download .bas</button>
+      <label class="small filebtn">Open file…<input type="file" id="progFile" accept=".bas,.txt,.prg,.lst"></label>
+    </div>
+    <p class="hint" id="progMsg">Send to C64 replaces the program in memory (like NEW followed by typing it in). Then RUN it.</p>
   </aside>
 
   <aside id="printerPanel" class="panel hidden" aria-label="Printer">
@@ -126,6 +150,8 @@
           <tr><td><kbd>F1–F8</kbd></td><td>function keys</td></tr>
           <tr><td><kbd>F9</kbd></td><td>flat 2D screen</td></tr>
           <tr><td><kbd>⌘V</kbd> / <kbd>Ctrl+V</kbd></td><td>paste text or a whole program (typed in for you)</td></tr>
+          <tr><td><kbd>⌘C</kbd> / <kbd>Ctrl+C</kbd></td><td>copy what is on the C64 screen</td></tr>
+          <tr><td><b>Program</b> button</td><td>edit, copy and paste whole listings</td></tr>
         </table>
       </section>
       <section>
@@ -141,6 +167,7 @@ RUN
 
 POKE 53280,0 : POKE 53281,0
 SYS 64738</pre>
+        <p>The GAMES disk has Snake, Pong, Breakout, Space Raid, Blockfall, Lunar Lander, Hangman, Codebreaker, Tic Tac Toe, Blackjack, Wumpus, a text adventure and more. UTILITIES has a SID piano, a sprite editor and an address book that saves to disk.</p>
         <p>The screen editor works like the real one: move the cursor anywhere, edit a line, press RETURN to enter it.</p>
         <p>Click the <b>1541</b> to manage disks, the <b>joystick</b> to plug it into port 2 (arrows + space, or a gamepad), and the <b>power brick</b> to switch on and off.</p>
       </section>

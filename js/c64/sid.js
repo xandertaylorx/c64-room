@@ -17,7 +17,16 @@ class SIDProc extends AudioWorkletProcessor {
     this.port.onmessage = (e) => {
       const d = e.data;
       if (d.mute !== undefined) { this.muted = d.mute; return; }
-      for (let i = 0; i < d.length; i += 2) this.r[d[i]] = d[i + 1];
+      for (let i = 0; i < d.length; i += 2) {
+        const reg = d[i], val = d[i + 1], old = this.r[reg];
+        this.r[reg] = val;
+        // gate edges are applied in write order so a quick off-on pair retriggers the envelope
+        if (reg === 4 || reg === 11 || reg === 18) {
+          const vc = this.v[(reg - 4) / 7];
+          if ((val & 1) && !(old & 1)) { vc.state = 0; vc.prevGate = 1; }
+          else if (!(val & 1) && (old & 1)) { vc.state = 3; vc.prevGate = 0; }
+        }
+      }
     };
   }
   process(_in, outputs) {

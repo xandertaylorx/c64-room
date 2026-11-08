@@ -58,6 +58,8 @@ export class DiskStore {
     this._set(LS_PREFIX + disk.id, JSON.stringify({ name: disk.name, diskId: disk.diskId, files: disk.files.map(f => ({ name: f.name, type: f.type, data: b64(f.data) })) }));
   }
   remove(id) { this._del(LS_PREFIX + id); }
+  get(k) { return this._get(k); }
+  set(k, v) { this._set(k, v); }
   get current() { return this._get(LS_CURRENT); }
   set current(id) { this._set(LS_CURRENT, id); }
 }

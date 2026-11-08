@@ -1,12 +1,13 @@
 // Ties the chips together: power, reset, timing, keyboard, SYS/machine code, IRQs, peripherals.
 import { Machine } from './machine.js';
 import { Kernal } from './kernal.js';
-import { Basic, crunch, BasicError } from './basic.js';
+import { Basic, crunch, BasicError, TOKENS } from './basic.js';
 import { CPU } from './cpu6502.js';
 import { SID, Foley } from './sid.js';
 import { DiskStore, Drive1541, asciiToPet } from './disk.js';
 import { MATRIX } from './keyboard.js';
 import { DEMO_PROGRAMS } from './demos.js';
+import { GAME_PROGRAMS, UTILITY_PROGRAMS, LIB_VERSION } from './games.js';
 
 const SENTINEL = 0xff3a;   // return address used to detect the end of a SYS call
 const IRQ_DONE = 0xff3b;
@@ -47,38 +48,58 @@ export class C64 {
     this.shift = false; this.cbm = false; this.ctrl = false;
     this.listeners = {};
     this.irqAcc = 0;
+    this.keyQueue = [];
     this.setupDisks();
   }
   on(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
   emit(ev, ...a) { (this.listeners[ev] || []).forEach(f => f(...a)); }
 
   setupDisks() {
-    let ids = this.store.listDisks();
-    if (!ids.includes('demos')) {
-      const disk = { id: 'demos', name: 'DEMO DISK', diskId: '64', files: [] };
-      for (const d of DEMO_PROGRAMS) disk.files.push({ name: d.name, type: 'PRG', data: this.tokenizeSource(d.src) });
+    const ids = this.store.listDisks();
+    // library disks are refreshed from the built-in programs; anything the user saved on them is kept
+    const lib = [
+      { id: 'games', name: 'GAMES', diskId: 'G1', progs: GAME_PROGRAMS },
+      { id: 'utils', name: 'UTILITIES', diskId: 'U1', progs: UTILITY_PROGRAMS },
+      { id: 'demos', name: 'DEMO DISK', diskId: '64', progs: DEMO_PROGRAMS, drop: ['SNAKE', 'GUESS'] },
+    ];
+    for (const L of lib) {
+      let disk = ids.includes(L.id) ? this.store.load(L.id) : { id: L.id, name: L.name, diskId: L.diskId, files: [] };
+      const mine = L.progs.map(d => ({ name: asciiToPet(d.name), type: 'PRG', data: this.tokenizeSource(d.src) }));
+      const libNames = new Set(mine.map(f => f.name));
+      const drop = new Set((L.drop || []).map(asciiToPet));
+      disk.files = [...mine, ...disk.files.filter(f => !libNames.has(f.name) && !drop.has(f.name))];
+      disk.name = L.name;
       this.store.save(disk);
     }
     if (!ids.includes('blank')) this.store.save({ id: 'blank', name: 'MY DISK', diskId: '01', files: [] });
     if (!ids.includes('~tape')) this.store.save({ id: '~tape', name: 'TAPE', diskId: 'TP', files: [] });
     const cur = this.store.current;
-    this.drive.insert(this.store.load(cur && this.store.listDisks().includes(cur) ? cur : 'demos'));
+    const libVer = this.store.get('c64.libVersion');
+    const pick = (cur && this.store.listDisks().includes(cur) && libVer === LIB_VERSION) ? cur : 'games';
+    this.store.set('c64.libVersion', LIB_VERSION);
+    this.drive.insert(this.store.load(pick));
     this.tape.insert(this.store.load('~tape'));
     this.store.current = this.drive.disk.id;
     this.drive.onActivity = (s) => this.emit('drive', s);
   }
 
-  // turn BASIC source text (ASCII, with {codes}) into a PRG image
-  tokenizeSource(src) {
-    const lines = [];
-    for (const raw of src.trim().split('\n')) {
-      const m = /^\s*(\d+)\s*(.*)$/.exec(raw);
-      if (!m) continue;
-      let t = m[2].replace(/\{(\d+)\}/g, (_, n) => String.fromCharCode(+n));
-      // in source, lowercase means unshifted (normal) letters; keep strings' case markers
+  // ---- program text <-> memory ---------------------------------------------
+  // parse a listing (ASCII, {n} = CHR$(n)) into tokenised lines
+  parseListing(src) {
+    const lines = []; let skipped = 0;
+    for (const raw of src.replace(/\r\n?/g, '\n').split('\n')) {
+      if (!raw.trim()) continue;
+      const m = /^\s*(\d{1,5})\s?(.*)$/.exec(raw);
+      if (!m || +m[1] > 63999) { skipped++; continue; }
+      let t = m[2].replace(/\{(\d+)\}/g, (_, n) => String.fromCharCode(Math.min(255, +n)));
       t = asciiToPet(t);
       lines.push([+m[1], crunch([...t].map(c => c.charCodeAt(0)))]);
     }
+    return { lines, skipped };
+  }
+  tokenizeSource(src) {
+    const { lines } = this.parseListing(src);
+    lines.sort((a, b) => a[0] - b[0]);
     let addr = 0x0801; const out = [0x01, 0x08];
     for (const [n, b] of lines) {
       const next = addr + 4 + b.length + 1;
@@ -88,10 +109,42 @@ export class C64 {
     out.push(0, 0);
     return new Uint8Array(out);
   }
+  // the program currently in memory as text
+  listing() {
+    const r = this.m.ram, out = [];
+    for (const l of this.basic.lines()) {
+      let s = l.num + ' ', a = l.addr + 4, q = false;
+      while (r[a]) {
+        const c = r[a++];
+        if (c === 34) { q = !q; s += '"'; }
+        else if (!q && c >= 0x80 && c <= 0xcb && c !== 0xff) s += TOKENS[c - 0x80];
+        else if (c >= 32 && c <= 90 && c !== 92) s += String.fromCharCode(c);
+        else if (c === 91 || c === 93 || c === 94 || c === 95) s += String.fromCharCode(c);
+        else s += '{' + c + '}';
+      }
+      out.push(s);
+    }
+    return out.join('\n');
+  }
+  // replace the program in memory with a listing; returns {count, skipped}
+  loadListing(src) {
+    const { lines, skipped } = this.parseListing(src);
+    this.basic.newProgram();
+    for (const [n, b] of lines) this.basic.storeLine(n, b);
+    return { count: lines.length, skipped };
+  }
+  // current program as a PRG image (what SAVE writes)
+  programPrg() {
+    const start = this.basic.txtTab, end = this.basic.varTab;
+    const data = new Uint8Array(end - start + 2);
+    data[0] = start & 0xff; data[1] = start >> 8;
+    data.set(this.m.ram.subarray(start, end), 2);
+    return data;
+  }
 
   // ---- power ---------------------------------------------------------------
   powerOn() {
-    this.powered = true;
+    this.powered = true; this.keyQueue = [];
     this.m.reset(); this.cpuRunning = false;
     this.k = new Kernal(this.m);
     this.basic = new Basic(this);
@@ -167,7 +220,8 @@ export class C64 {
       this.k.pushKey(3); return;
     }
     if (p === 'COMMODORE-SHIFT') return;
-    this.k.pushKey(p);
+    // the real buffer holds 10 keys; extra fast keystrokes wait in a queue instead of being lost
+    if (this.keyQueue.length || !this.k.pushKey(p)) { if (this.keyQueue.length < 4000) this.keyQueue.push(p); }
   }
   toggleCase() { if (!(this.m.ram[657] & 0x80)) this.m.vic[0x18] ^= 2; }
   restoreKey(withStop) { if (withStop || this.heldKeys.has('STOP')) this.warmReset(); }
@@ -260,7 +314,7 @@ export class C64 {
     this.time += dt;
     const b = this.basic;
     // statements per frame: ~1200/s at 1x
-    const budget = this.speed >= 100 ? 1e9 : Math.max(1, Math.round(1200 * this.speed * dt));
+    const budget = this.speed >= 100 ? 1e9 : Math.max(1, Math.round(2500 * this.speed * dt));
     const t0 = performance.now();
     this.irqAcc += dt;
     if (this.irqAcc >= 1 / 60) { this.irqAcc %= 1 / 60; try { this.serviceIrq(); } catch (e) { console.warn(e); } }
@@ -272,6 +326,7 @@ export class C64 {
     else if (b.state === 'list') b.serviceList(this.speed >= 100 ? 1000 : Math.max(1, Math.round(60 * this.speed * dt)));
     else if (b.state === 'wait') b.serviceWait();
     else if (b.state === 'device') b.serviceDevice(dt);
+    while (this.keyQueue.length && this.m.ram[198] < (this.m.ram[649] || 10)) this.k.pushKey(this.keyQueue.shift());
     this.k.serviceInput();
     this.k.tickCursor(dt, this.k.inputActive);
     this.sid.flush();
