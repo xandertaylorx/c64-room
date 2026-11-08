@@ -4,10 +4,11 @@ import { Kernal } from './kernal.js';
 import { Basic, crunch, BasicError, TOKENS } from './basic.js';
 import { CPU } from './cpu6502.js';
 import { SID, Foley } from './sid.js';
-import { DiskStore, Drive1541, asciiToPet } from './disk.js';
+import { DiskStore, Drive1541, asciiToPet, petToAscii } from './disk.js';
 import { MATRIX } from './keyboard.js';
 import { DEMO_PROGRAMS } from './demos.js';
 import { GAME_PROGRAMS, UTILITY_PROGRAMS, LIB_VERSION } from './games.js';
+import { Desktop } from './desktop.js';
 
 const SENTINEL = 0xff3a;   // return address used to detect the end of a SYS call
 const IRQ_DONE = 0xff3b;
@@ -49,6 +50,7 @@ export class C64 {
     this.listeners = {};
     this.irqAcc = 0;
     this.keyQueue = [];
+    this.app = null;
     this.setupDisks();
   }
   on(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
@@ -144,7 +146,7 @@ export class C64 {
 
   // ---- power ---------------------------------------------------------------
   powerOn() {
-    this.powered = true; this.keyQueue = [];
+    this.powered = true; this.keyQueue = []; this.app = null;
     this.m.reset(); this.cpuRunning = false;
     this.k = new Kernal(this.m);
     this.basic = new Basic(this);
@@ -157,7 +159,7 @@ export class C64 {
     this.emit('power', true);
   }
   powerOff() {
-    this.powered = false;
+    this.powered = false; this.app = null;
     for (let i = 0; i < 25; i++) this.sid.write(i, 0);
     this.sid.flush();
     this.emit('power', false);
@@ -166,6 +168,7 @@ export class C64 {
   // RUN/STOP + RESTORE: warm start, program kept
   warmReset() {
     if (!this.powered) return;
+    if (this.app) { this.app.stop(); this.app = null; }
     this.cpuRunning = false;
     const r = this.m.ram;
     for (let i = 0; i < 25; i++) this.m.write(0xd400 + i, 0);
@@ -176,6 +179,28 @@ export class C64 {
     this.k.clear();
     this.k.print('READY.\r'); this.basic.toDirect();
   }
+
+  // ---- applications that take over the screen (Desk64) --------------------------------
+  startApp(fromSys) {
+    if (!this.powered || this.app) return;
+    this.cpuRunning = false;
+    this.appPrev = fromSys ? 'run' : this.basic.state;
+    this.appFromSys = !!fromSys;
+    this.app = new Desktop(this); this.app.start(); this.basic.state = 'app';
+    this.emit('app', true);
+  }
+  stopApp() {
+    const app = this.app; if (!app) return;
+    app.stop(); this.app = null; this.emit('app', false);
+    this.m.keysDown.clear(); this.heldKeys.clear();
+    const run = app.runAfter;
+    if (run) {
+      this.basic.state = 'direct'; this.basic.line = -1; this.k.clear(); this.basic.ready();
+      for (const ch of 'LOAD"' + petToAscii(run).toUpperCase() + '",8\rRUN\r') this.keyQueue.push(ch === '\r' ? 13 : ch.charCodeAt(0));
+    } else if (this.appFromSys) this.basic.state = 'run';
+    else { this.basic.state = 'direct'; this.basic.line = -1; this.basic.ready(); }
+  }
+  mouse(type, x, y) { if (this.app) this.app.mouse(type, x, y); }
 
   jiffies() { return Math.floor(this.jiffyBase + this.time * 60) % 5184000; }
   tiString() {
@@ -212,6 +237,7 @@ export class C64 {
   }
   typePetscii(p) {
     if (!this.powered) return;
+    if (this.app) { this.app.key(p); return; }
     const b = this.basic;
     if (p === 3) { // RUN/STOP
       if (this.m.ram[808] !== 0xed) { this.k.pushKey(3); return; }
@@ -230,6 +256,7 @@ export class C64 {
   doSys(addr) {
     const r = this.m.ram;
     switch (addr) {
+      case 49152: this.startApp(true); return;                                    // Desk64
       case 64738: this.powerOn(); this.basic.state = 'direct'; return;           // cold reset
       case 58732: case 58640: this.k.readPos(); return;                            // set cursor from 211/214
       case 58692: case 65409: this.k.clear(); return;                              // clear screen / CINT
@@ -313,6 +340,7 @@ export class C64 {
     dt = Math.min(dt, 0.1);
     this.time += dt;
     const b = this.basic;
+    if (this.app) { if (!this.app.frame(dt)) this.stopApp(); this.sid.flush(); return; }
     // statements per frame: ~1200/s at 1x
     const budget = this.speed >= 100 ? 1e9 : Math.max(1, Math.round(2500 * this.speed * dt));
     const t0 = performance.now();

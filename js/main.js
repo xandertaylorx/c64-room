@@ -442,7 +442,48 @@ function describe(o) {
   if (k === 'monitor') return '1702 monitor<small>click to zoom in</small>';
   return null;
 }
+// ---- mouse on the emulated screen (for Desk64) -------------------------------------------------
+const screenRay = new THREE.Raycaster(), screenNdc = new THREE.Vector2();
+function screenPx(e, viaFlat) {
+  let cx, cy;
+  if (viaFlat) { const r = $('flatCanvas').getBoundingClientRect(); cx = (e.clientX - r.left) / r.width * 1024; cy = (e.clientY - r.top) / r.height * 768; }
+  else {
+    if (!screenMesh) return null;
+    const r = canvas.getBoundingClientRect();
+    screenNdc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    screenRay.setFromCamera(screenNdc, camera);
+    const hit = screenRay.intersectObject(screenMesh, false)[0];
+    if (!hit || !hit.uv) return null;
+    cx = hit.uv.x * 1024; cy = hit.uv.y * 768;
+  }
+  // canvas -> VIC frame (the picture is inset by 70/62 px and scaled 884x644 -> 384x272), then to the 320x200 window
+  return { x: (cx - 70) / 884 * 384 - 32, y: (cy - 62) / 644 * 272 - 36 };
+}
+let appPressed = false;
+function appPointer(e, kind, viaFlat) {
+  const p = screenPx(e, viaFlat);
+  if (!p) { if (kind === 'up' && appPressed) { c64.mouse('up', 160, 100); appPressed = false; controls.enabled = true; } return false; }
+  if (kind === 'down') { appPressed = true; controls.enabled = false; }
+  if (kind === 'up') { appPressed = false; controls.enabled = true; }
+  if (kind === 'move' && !appPressed && (p.x < -4 || p.y < -4 || p.x > 324 || p.y > 204)) return false;
+  c64.mouse(kind, p.x, p.y);
+  return true;
+}
+const flatEl = $('flatCanvas');
+flatEl.addEventListener('pointermove', (e) => { if (c64.app) appPointer(e, 'move', true); });
+flatEl.addEventListener('pointerdown', (e) => { if (c64.app) { flatEl.setPointerCapture(e.pointerId); appPointer(e, 'down', true); } });
+flatEl.addEventListener('pointerup', (e) => { if (c64.app) appPointer(e, 'up', true); });
+$('btnDesk').onclick = () => {
+  if (!started) return;
+  if (!c64.powered) powerOn();
+  if (c64.app) { toast('Desk64 is already open'); return; }
+  if (c64.basic.state !== 'direct') { toast('Press RUN/STOP (Esc) first, then try again'); return; }
+  c64.startApp(false);
+};
+c64.on('app', (on) => { $('btnDesk').classList.toggle('on', on); if (on) { setView('screen'); toast('Desk64: double-click icons · Esc cancels dialogs · Quit from the Desk64 menu'); } else canvas.style.cursor = 'grab'; });
+
 canvas.addEventListener('pointermove', (e) => {
+  if (c64.app) { const over = appPointer(e, 'move', false); canvas.style.cursor = over ? 'none' : 'grab'; $('tooltip').classList.add('hidden'); if (over || appPressed) return; }
   if (pressedKey) return;
   const o = pick(e);
   if (hover !== o) {
@@ -458,6 +499,7 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerleave', () => $('tooltip').classList.add('hidden'));
 window.addEventListener('pointerdown', (e) => {
   if (e.target !== canvas) return;
+  if (c64.app && appPointer(e, 'down', false)) { canvas.setPointerCapture(e.pointerId); e.stopPropagation(); return; }
   downAt = { x: e.clientX, y: e.clientY };
   const o = pick(e);
   if (o && o.userData.kind === 'key') {
@@ -469,6 +511,7 @@ window.addEventListener('pointerdown', (e) => {
   }
 }, { capture: true });
 canvas.addEventListener('pointerup', (e) => {
+  if (c64.app || appPressed) { appPointer(e, 'up', false); return; }
   if (pressedKey) { clickKeyUp(pressedKey); pressedKey = null; controls.enabled = true; return; }
   if (!downAt || Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) return; // it was a drag
   const o = pick(e); if (!o || !started) return;

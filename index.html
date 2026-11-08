@@ -63,6 +63,7 @@
     <span class="sep"></span>
     <button id="btnDisk" class="key" title="1541 disk drive"><span class="led drive"></span>1541</button>
     <button id="btnProg" class="key" title="Program editor: copy, paste and edit BASIC listings">Program</button>
+    <button id="btnDesk" class="key" title="Open the Desk64 graphical desktop (mouse)">Desktop</button>
     <button id="btnJoy" class="key" title="Joystick in port 2: arrows + space">Joystick</button>
     <button id="btnPrinter" class="key hidden" title="Printer output">Printer</button>
     <span class="sep"></span>
@@ -167,6 +168,7 @@ RUN
 
 POKE 53280,0 : POKE 53281,0
 SYS 64738</pre>
+        <p><b>Desktop</b> starts Desk64, a mouse-driven desktop (windows, menus, notepad, paint, calculator, clock, file manager) that saves to the disk. Or type <code>LOAD"DESKTOP",8</code> and <code>RUN</code> from the UTILITIES disk.</p>
         <p>The GAMES disk has Snake, Pong, Breakout, Space Raid, Blockfall, Lunar Lander, Hangman, Codebreaker, Tic Tac Toe, Blackjack, Wumpus, a text adventure and more. UTILITIES has a SID piano, a sprite editor and an address book that saves to disk.</p>
         <p>The screen editor works like the real one: move the cursor anywhere, edit a line, press RETURN to enter it.</p>
         <p>Click the <b>1541</b> to manage disks, the <b>joystick</b> to plug it into port 2 (arrows + space, or a gamepad), and the <b>power brick</b> to switch on and off.</p>

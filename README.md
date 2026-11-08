@@ -32,6 +32,17 @@ text in `programs/**/*.bas`; run `node tools/build-library.mjs` after editing to
 Anything you SAVE to those disks is kept; the built-in programs are refreshed when the library changes.
 Use the **MY DISK** disk for your own work.
 
+## Desk64: a graphical desktop
+
+Press **Desktop** in the bar (or `LOAD"DESKTOP",8` then `RUN` from the UTILITIES disk) to start Desk64, an
+original mouse-driven desktop in the spirit of GEOS. It runs in the VIC-II hi-res bitmap mode, draws into
+real bitmap RAM and uses hardware sprites for the pointer. You get a menu bar, draggable windows, desktop icons,
+a text editor (Notepad, saves `.DOC`), Paint (saves `.PIC`), a calculator, a clock and a disk file manager that can
+open, rename, delete, switch disks and run BASIC programs. Everything saves to the virtual 1541.
+
+It is **not GEOS**: GEOS is Berkeley Softworks' / Geoworks' copyrighted software and needs the original ROMs and
+cycle-exact hardware, neither of which this project includes. Code: `js/c64/desktop.js`.
+
 ## Using it
 
 - **Esc** = RUN/STOP, **PageUp** = RUN/STOP + RESTORE, **Alt/⌥** = C=, **Ctrl/Tab** = CTRL
@@ -64,6 +75,7 @@ js/c64/basic.js             BASIC V2 tokeniser and interpreter
 js/c64/disk.js              1541 drive, D64 import
 js/c64/system.js            wires everything together
 js/c64/font.js              original 8x8 character set
+js/c64/desktop.js           Desk64, the graphical desktop
 js/c64/demos.js             demo disk programs
 js/c64/games.js             GENERATED from programs/*/*.bas
 programs/                   the built-in games and utilities as BASIC source
