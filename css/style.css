@@ -130,3 +130,12 @@ code, kbd { font-family: var(--mono); font-size: 11px; background: rgba(239,230,
   .dock { bottom: 10px; justify-content: flex-start; }
   .panel { top: 60px; right: 16px; }
 }
+
+.gh {
+  position: fixed; left: 18px; bottom: 18px; z-index: 6; width: 44px; height: 44px; display: grid; place-items: center;
+  color: var(--ink); background: linear-gradient(#2b241e, #1d1814); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05); transition: transform .12s, color .15s;
+}
+.gh:hover { color: var(--c3); transform: translateY(-2px); }
+.gh:focus-visible { outline: 2px solid var(--c3); outline-offset: 2px; }
+@media (max-width: 720px) { .gh { bottom: 76px; } }
