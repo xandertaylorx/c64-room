@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>C64 Room</title>
+  <meta name="description" content="A Commodore 64 you can actually use: a 3D desk setup with a working BASIC V2 system, 6502 CPU, VIC-II video, SID sound and a 1541 disk drive.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <div id="flat" class="flat hidden" aria-hidden="true">
+    <div class="flat-frame"><canvas id="flatCanvas" width="1024" height="768"></canvas></div>
+  </div>
+
+  <header class="brand">
+    <div class="stripes"><i></i><i></i><i></i><i></i><i></i></div>
+    <div>
+      <h1>C64 Room</h1>
+      <p>64K RAM system · BASIC V2 · 6510 · VIC-II · SID · 1541</p>
+    </div>
+  </header>
+
+  <div id="tooltip" class="tooltip hidden"></div>
+  <div id="mods" class="mods"></div>
+
+  <nav class="dock" aria-label="Controls">
+    <button id="btnPower" class="key power" title="Power switch (right side of the C64)"><span class="led"></span>Power</button>
+    <button id="btnReset" class="key" title="RUN/STOP + RESTORE (PageUp)">Reset</button>
+    <span class="sep"></span>
+    <button class="key view" data-view="desk">Desk</button>
+    <button class="key view" data-view="keys">Keys</button>
+    <button class="key view" data-view="screen">Screen</button>
+    <button id="btnFlat" class="key" title="Flat 2D screen (F9)">2D</button>
+    <span class="sep"></span>
+    <button id="btnDisk" class="key" title="1541 disk drive"><span class="led drive"></span>1541</button>
+    <button id="btnJoy" class="key" title="Joystick in port 2: arrows + space">Joystick</button>
+    <button id="btnPrinter" class="key hidden" title="Printer output">Printer</button>
+    <span class="sep"></span>
+    <label class="select">Speed
+      <select id="speed">
+        <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="100">Max</option>
+      </select>
+    </label>
+    <button id="btnSound" class="key" title="Sound on/off">Sound</button>
+    <button id="btnFx" class="key on" title="CRT glow and scanlines">CRT</button>
+    <button id="btnHelp" class="key" title="Keyboard help">?</button>
+  </nav>
+
+  <aside id="diskPanel" class="panel hidden" aria-label="1541 disk drive">
+    <div class="panel-head">
+      <h2>1541 Disk Drive <small>device 8</small></h2>
+      <button class="close" data-close="diskPanel" aria-label="Close">×</button>
+    </div>
+    <div class="row">
+      <label class="grow">Inserted disk
+        <select id="diskSelect"></select>
+      </label>
+      <button id="diskNew" class="small">New disk</button>
+    </div>
+    <div class="disk-label" id="diskLabel"></div>
+    <ul id="fileList" class="files"></ul>
+    <div class="drop" id="dropZone">
+      Drop <b>.prg</b>, <b>.d64</b> or BASIC <b>.bas/.txt</b> files here
+      <input type="file" id="fileInput" multiple accept=".prg,.d64,.bas,.txt,.seq">
+    </div>
+    <p class="hint">Disks are saved in this browser. Try <code>LOAD"$",8</code> then <code>LIST</code>.</p>
+  </aside>
+
+  <aside id="printerPanel" class="panel hidden" aria-label="Printer">
+    <div class="panel-head">
+      <h2>MPS printer <small>device 4</small></h2>
+      <button class="close" data-close="printerPanel" aria-label="Close">×</button>
+    </div>
+    <pre id="paper" class="paper"></pre>
+    <div class="row"><button id="paperClear" class="small">Tear off paper</button></div>
+  </aside>
+
+  <aside id="helpPanel" class="panel wide hidden" aria-label="Help">
+    <div class="panel-head">
+      <h2>How to use it</h2>
+      <button class="close" data-close="helpPanel" aria-label="Close">×</button>
+    </div>
+    <div class="help">
+      <section>
+        <h3>Typing</h3>
+        <p>Type on your own keyboard, or click the keys on the 3D model. Clicking <kbd>SHIFT</kbd>, <kbd>C=</kbd> or <kbd>CTRL</kbd> latches them for the next key.</p>
+        <table>
+          <tr><td><kbd>Esc</kbd></td><td>RUN/STOP</td></tr>
+          <tr><td><kbd>PageUp</kbd></td><td>RUN/STOP + RESTORE (warm reset)</td></tr>
+          <tr><td><kbd>Alt</kbd> / <kbd>⌥</kbd></td><td>C= (Commodore) key</td></tr>
+          <tr><td><kbd>Ctrl</kbd> / <kbd>Tab</kbd></td><td>CTRL</td></tr>
+          <tr><td><kbd>Home</kbd> · <kbd>Shift+Home</kbd></td><td>HOME · CLR</td></tr>
+          <tr><td><kbd>Backspace</kbd> · <kbd>Insert</kbd></td><td>DEL · INST</td></tr>
+          <tr><td><kbd>Shift</kbd> + <kbd>Alt</kbd></td><td>switch upper/lower case set</td></tr>
+          <tr><td><kbd>Ctrl</kbd>/<kbd>Alt</kbd> + <kbd>1-8</kbd></td><td>text colours</td></tr>
+          <tr><td><kbd>Ctrl</kbd> + <kbd>9</kbd> / <kbd>0</kbd></td><td>reverse on / off</td></tr>
+          <tr><td><kbd>Shift</kbd> + letter</td><td>PETSCII graphics</td></tr>
+          <tr><td><kbd>F1–F8</kbd></td><td>function keys</td></tr>
+          <tr><td><kbd>F9</kbd></td><td>flat 2D screen</td></tr>
+        </table>
+      </section>
+      <section>
+        <h3>Try this</h3>
+<pre>LOAD"$",8
+LIST
+LOAD"SNAKE",8
+RUN
+
+10 PRINT "HELLO ";
+20 GOTO 10
+RUN
+
+POKE 53280,0 : POKE 53281,0
+SYS 64738</pre>
+        <p>The screen editor works like the real one: move the cursor anywhere, edit a line, press RETURN to enter it.</p>
+        <p>Click the <b>1541</b> to manage disks, the <b>joystick</b> to plug it into port 2 (arrows + space, or a gamepad), and the <b>power brick</b> to switch on and off.</p>
+      </section>
+    </div>
+  </aside>
+
+  <div id="start" class="start">
+    <div class="start-card">
+      <div class="stripes big"><i></i><i></i><i></i><i></i><i></i></div>
+      <h2>C64 Room</h2>
+      <p id="loadText">Unpacking the box…</p>
+      <div class="bar"><span id="loadBar"></span></div>
+      <button id="startBtn" class="key big" disabled>Switch on</button>
+      <p class="fine">Sound comes from a SID emulation. Your programs and disks stay in this browser.</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
