@@ -240,12 +240,49 @@ function clickKeyUp(name) {
 }
 
 // physical keyboard
+// pasting: text is fed through the 10-key buffer as if typed, so whole programs can be pasted
+const pasteQueue = [];
+const PASTE_SYMBOLS = { '£': 92, '^': 94, '_': 95, '`': 95, '\\': 92, '~': 255, '[': 91, ']': 93, '{': 91, '}': 93, '|': 221 };
+function pasteText(text) {
+  if (!c64.powered) return;
+  for (const ch of text.replace(/\r\n?/g, '\n')) {
+    const c = ch.charCodeAt(0);
+    let p = null;
+    if (ch === '\n') p = 13;
+    else if (c >= 97 && c <= 122) p = c - 32;           // letters type as normal (unshifted) C64 letters
+    else if (c >= 32 && c <= 90) p = c;
+    else if (PASTE_SYMBOLS[ch] !== undefined) p = PASTE_SYMBOLS[ch];
+    else if (ch === '\t') p = 32;
+    else if (ch === '“' || ch === '”') p = 34;
+    else if (ch === '‘' || ch === '’') p = 39;
+    if (p === null) continue;
+    pasteQueue.push(p);
+  }
+}
+function feedPaste() {
+  // only top up the buffer while the editor (or a running program) can take keys
+  while (pasteQueue.length && c64.m.ram[198] < 10) {
+    if (c64.basic.state === 'device' || c64.basic.state === 'list') break;
+    const p = pasteQueue.shift();
+    c64.typePetscii(p);
+    if (p === 13) break; // let the line be processed before typing the next one
+  }
+}
+window.addEventListener('paste', (e) => {
+  if (!started || isTypingInUI(e)) return;
+  const text = e.clipboardData && e.clipboardData.getData('text');
+  if (!text) return;
+  e.preventDefault();
+  pasteText(text);
+});
+
 let joyMode = false;
 const pcDown = new Map(); // code -> list of c64 key names animated
 function isTypingInUI(e) { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA'); }
 window.addEventListener('keydown', (e) => {
   if (!started || isTypingInUI(e)) return;
   if (e.metaKey) return; // leave browser shortcuts alone
+  if (e.ctrlKey && e.code === 'KeyV' && !e.altKey) return; // let the browser paste (handled below)
   if (e.code === 'F9') { e.preventDefault(); setFlat(!flat); return; }
   if (e.code === 'F11' || e.code === 'F12') return;
   e.preventDefault();
@@ -520,7 +557,7 @@ let ledDrive = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (started) { pollGamepad(); c64.frame(dt); }
+  if (started) { pollGamepad(); feedPaste(); c64.frame(dt); }
   crt.draw(dt);
   screenTex.needsUpdate = true;
   if (flat) flatCtx.drawImage(crt.canvas, 0, 0);
