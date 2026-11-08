@@ -78,6 +78,7 @@ const VIEWS = {
   desk: { pos: [1.2, 5.6, 10.6], target: [-0.2, 1.6, 0.6] },
   keys: { pos: [-0.2, 7.2, 7.6], target: [-0.2, 1.3, 1.35] },
   screen: { pos: [0, 2.32, 3.1], target: [0, 2.28, -0.4] },
+  close: { pos: [0.15, 5.4, 7.7], target: [-0.1, 1.7, 2.1] },
 };
 let tween = null;
 function setView(name, instant = false) {
@@ -87,6 +88,7 @@ function setView(name, instant = false) {
   if (instant) { camera.position.copy(to.pos); controls.target.copy(to.target); controls.update(); return; }
   tween = { t: 0, from: { pos: camera.position.clone(), target: controls.target.clone() }, to };
 }
+window.setView = setView; window.VIEWS = VIEWS;
 setView('desk', true);
 camera.position.add(new THREE.Vector3(3, 3, 6)); // start a little further out for the intro
 setTimeout(() => setView('desk'), 50);
@@ -144,6 +146,15 @@ loader.load('assets/c64.glb', (gltf) => {
   $('loadText').textContent = 'The 3D model could not load, using the flat screen instead.';
   setFlat(true); ready();
 });
+
+// screen position of a key / the joystick (used by automated demos and tests)
+window.screenPosOf = (name) => {
+  const o = name === 'joystick' ? joystick : (keys.get(name) || {}).mesh;
+  if (!o) return null;
+  const v = new THREE.Vector3(); o.getWorldPosition(v); v.project(camera);
+  const r = canvas.getBoundingClientRect();
+  return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
+};
 
 function addLeds() {
   const ray = new THREE.Raycaster();

@@ -107,8 +107,9 @@ export function pcToPetscii(e) {
   if (fk) return 132 + [0, 1, 5, 2, 6, 3, 7, 4, 8][+fk[1]];
   if (k.length === 1) {
     const c = k.charCodeAt(0);
-    if (c >= 97 && c <= 122) return c - 32;          // a-z -> unshifted letters
-    if (c >= 65 && c <= 90) return c + 0x80;          // A-Z -> shifted (graphics / capitals)
+    // letters follow the Shift key, not the case of the character: Caps Lock must not
+    // turn everything into PETSCII graphics
+    if ((c >= 97 && c <= 122) || (c >= 65 && c <= 90)) { const u = k.toUpperCase().charCodeAt(0); return shift ? u + 0x80 : u; }
     if (c >= 48 && c <= 57) return c;
     if (SYMBOLS[k] !== undefined) return SYMBOLS[k];
     if (k === '£') return 92;
