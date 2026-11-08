@@ -521,7 +521,7 @@ canvas.addEventListener('pointerup', (e) => {
   else if (k === 'joystick') setJoy(!joyMode);
   else if (k === 'power') togglePower();
 });
-canvas.addEventListener('dblclick', (e) => { const o = pick(e); if (!o || o.userData.kind === 'key') return; if (o.userData.kind === 'screen') setView('desk'); });
+canvas.addEventListener('dblclick', (e) => { if (c64.app || appPressed) { e.preventDefault(); return; } const o = pick(e); if (!o || o.userData.kind === 'key') return; if (o.userData.kind === 'screen') setView('desk'); });
 
 // ---------------------------------------------------------------- dock & panels
 // buttons shouldn't keep focus, or Space/Enter typed for the C64 would press them
